@@ -107,8 +107,8 @@ const screens = {
 };
 
 const stimulusEl = document.getElementById("stimulus");
-const participantIdInput = document.getElementById("participant-id");
-const idError = document.getElementById("id-error");
+const participantIdDisplay = document.getElementById("participant-id-display");
+const finishedParticipantId = document.getElementById("finished-participant-id");
 const btnBeginPractice = document.getElementById("btn-begin-practice");
 const btnBeginExperiment = document.getElementById("btn-begin-experiment");
 const responseForm = document.getElementById("response-form");
@@ -132,6 +132,35 @@ const trialsRecordedEl = document.getElementById("trials-recorded");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Auto-assign a participant ID that is unique across concurrent browsers.
+ * Combines a timestamp fragment with random bits (no names, no manual entry).
+ * Example: P-M5K2XQ-A7F3
+ */
+function generateParticipantId() {
+  const timePart = Date.now().toString(36).toUpperCase();
+  let randPart = "";
+  if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(3);
+    window.crypto.getRandomValues(bytes);
+    randPart = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase()
+      .slice(0, 4);
+  } else {
+    randPart = Math.random().toString(36).slice(2, 6).toUpperCase();
+  }
+  return `P-${timePart}-${randPart}`;
+}
+
+function assignParticipantId() {
+  participantId = generateParticipantId();
+  if (participantIdDisplay) {
+    participantIdDisplay.textContent = participantId;
+  }
+  return participantId;
 }
 
 function randomInt(min, max) {
@@ -497,6 +526,9 @@ function finishExperiment() {
 
   if (trialsRecordedEl) {
     trialsRecordedEl.textContent = `${results.length} / ${TOTAL_EXPERIMENTAL_TRIALS} trials recorded`;
+  }
+  if (finishedParticipantId) {
+    finishedParticipantId.textContent = participantId;
   }
 
   resetSubmitButtonUI();
@@ -866,15 +898,7 @@ document.addEventListener("visibilitychange", () => {
 // =============================================================================
 
 btnBeginPractice.addEventListener("click", () => {
-  const id = participantIdInput.value.trim();
-  if (!id) {
-    idError.classList.remove("hidden");
-    participantIdInput.focus();
-    return;
-  }
-  idError.classList.add("hidden");
-  participantId = id;
-  participantIdInput.disabled = true;
+  if (!participantId) assignParticipantId();
   btnBeginPractice.disabled = true;
   runPracticePhase();
 });
@@ -898,13 +922,6 @@ if (btnSubmit) {
   });
 }
 
-// Allow Enter in participant ID to start practice
-participantIdInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    btnBeginPractice.click();
-  }
-});
-
-// Initial screen
+// Initial screen — assign ID immediately so concurrent participants diverge
+assignParticipantId();
 showScreen("instructions");

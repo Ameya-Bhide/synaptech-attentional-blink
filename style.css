@@ -91,29 +91,42 @@ h2 {
   margin: 0.35rem 0;
 }
 
+.participant-id-box {
+  margin-top: 1.75rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}
+
 .participant-label {
   display: block;
-  margin-top: 1.75rem;
+  margin: 0;
   font-weight: 600;
+}
+
+.participant-id-value {
+  margin: 0.4rem 0 0.5rem;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
+.participant-id-finish {
+  margin: 0.5rem 0 0;
+}
+
+.participant-id-finish strong {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 .hint {
   font-weight: 400;
   color: var(--muted);
   font-size: 0.9rem;
-}
-
-#participant-id {
-  display: block;
-  width: 100%;
-  max-width: 12rem;
-  margin-top: 0.4rem;
-  padding: 0.55rem 0.75rem;
-  font-size: 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--text);
+  margin: 0;
 }
 
 .error {

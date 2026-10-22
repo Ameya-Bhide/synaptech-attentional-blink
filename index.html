@@ -30,21 +30,16 @@
         </ul>
       </div>
 
-      <label class="participant-label" for="participant-id">
-        Participant ID
-        <span class="hint">(e.g. P01 — no names)</span>
-      </label>
-      <input
-        id="participant-id"
-        type="text"
-        maxlength="32"
-        autocomplete="off"
-        placeholder="P01"
-        spellcheck="false"
-      />
-      <p id="id-error" class="error hidden" role="alert">
-        Please enter a participant ID before continuing.
-      </p>
+      <div class="participant-id-box">
+        <p class="participant-label">Your participant ID</p>
+        <p id="participant-id-display" class="participant-id-value" aria-live="polite">
+          —
+        </p>
+        <p class="hint">
+          Assigned automatically so IDs stay unique during the session.
+          You do not need to enter anything.
+        </p>
+      </div>
 
       <button id="btn-begin-practice" type="button" class="primary">
         Begin Practice
@@ -112,6 +107,10 @@
     <section id="screen-finished" class="screen hidden">
       <h1>Experiment complete</h1>
       <p>Thank you for participating.</p>
+      <p class="participant-id-finish">
+        Participant ID:
+        <strong id="finished-participant-id">—</strong>
+      </p>
       <p id="trials-recorded" class="trials-recorded">50 / 50 trials recorded</p>
 
       <h2>Summary by lag</h2>

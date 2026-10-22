@@ -10,7 +10,7 @@ All stimulus generation, timing, scoring, and result formatting run locally in t
 
 ## Flow
 
-1. Enter a participant ID (e.g. `P01`)
+1. Open the site (a unique participant ID is assigned automatically)
 2. Read instructions
 3. Complete ~5 practice trials (with brief feedback)
 4. Complete 50 randomized experimental trials
