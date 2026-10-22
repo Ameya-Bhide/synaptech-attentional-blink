@@ -1,0 +1,737 @@
+/**
+ * Synaptech Attentional Blink Experiment
+ *
+ * Static browser experiment: RSVP of letters with two digit targets (T1, T2).
+ * Independent variable: lag between T1 and T2.
+ * Key DV: P(T2 correct | T1 correct).
+ */
+
+// =============================================================================
+// Configuration — tune these before club testing
+// =============================================================================
+
+/** Duration each RSVP item is shown (ms). */
+const ITEM_DURATION_MS = 100;
+
+/** Fixation cross duration before RSVP (ms). */
+const FIXATION_DURATION_MS = 500;
+
+/**
+ * Lag = number of RSVP positions from T1 to T2 (inclusive of T2, standard AB).
+ *
+ * Lag 1: T1, T2                 (adjacent)
+ * Lag 2: T1, letter, T2         (one intervening item)
+ * Lag 3: T1, letter, letter, T2
+ * ...
+ *
+ * Internally: index(T2) - index(T1) === lag
+ * Number of intervening distractors between T1 and T2 = lag - 1.
+ */
+const LAGS = [1, 2, 3, 5, 7];
+
+/** Experimental trials per lag condition. */
+const TRIALS_PER_LAG = 10;
+
+/** Practice trials before the main experiment (not exported). */
+const PRACTICE_TRIALS = 5;
+
+/**
+ * Fixed RSVP stream length (items). Typical AB streams are ~18–20.
+ * With T1 at positions 7–9 and max lag 7, T2 lands by position 16,
+ * leaving several trailing distractors.
+ */
+const STREAM_LENGTH = 20;
+
+/**
+ * T1 serial positions (1-indexed), chosen randomly per trial.
+ * Randomizing T1 location reduces temporal predictability.
+ */
+const T1_POSITIONS = [7, 8, 9];
+
+/**
+ * Letter distractors — uppercase, excluding I/O (resemble 1/0).
+ */
+const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ".split("");
+
+/**
+ * Digit targets — exclude 0/1 (resemble O/I).
+ */
+const DIGITS = [2, 3, 4, 5, 6, 7, 8, 9];
+
+/** Brief pause after practice feedback before next trial (ms). */
+const PRACTICE_FEEDBACK_MS = 1200;
+
+/** Total experimental trials (lags × trials per lag). */
+const TOTAL_EXPERIMENTAL_TRIALS = LAGS.length * TRIALS_PER_LAG;
+
+// =============================================================================
+// Experiment state
+// =============================================================================
+
+/** @type {'instructions'|'practice'|'practice-complete'|'experiment'|'finished'} */
+let state = "instructions";
+
+let participantId = "";
+let practiceTrials = [];
+let experimentalTrials = [];
+let results = [];
+let currentTrialIndex = 0;
+let experimentRunning = false;
+let submitting = false;
+let focusLostDuringTrial = false;
+
+// =============================================================================
+// DOM references
+// =============================================================================
+
+const screens = {
+  instructions: document.getElementById("screen-instructions"),
+  rsvp: document.getElementById("screen-rsvp"),
+  response: document.getElementById("screen-response"),
+  practiceComplete: document.getElementById("screen-practice-complete"),
+  finished: document.getElementById("screen-finished"),
+};
+
+const stimulusEl = document.getElementById("stimulus");
+const participantIdInput = document.getElementById("participant-id");
+const idError = document.getElementById("id-error");
+const btnBeginPractice = document.getElementById("btn-begin-practice");
+const btnBeginExperiment = document.getElementById("btn-begin-experiment");
+const responseForm = document.getElementById("response-form");
+const responseT1 = document.getElementById("response-t1");
+const responseT2 = document.getElementById("response-t2");
+const responseError = document.getElementById("response-error");
+const progressEl = document.getElementById("progress");
+const practiceFeedback = document.getElementById("practice-feedback");
+const summaryTable = document.getElementById("summary-table");
+const resultsFallback = document.getElementById("results-fallback");
+const btnCopy = document.getElementById("btn-copy");
+const btnDownload = document.getElementById("btn-download");
+const copyStatus = document.getElementById("copy-status");
+
+// =============================================================================
+// Utilities
+// =============================================================================
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function randomChoice(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/** Fisher–Yates shuffle (in place). Returns the same array. */
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function pickUniqueDigits() {
+  const shuffled = shuffleArray([...DIGITS]);
+  return [shuffled[0], shuffled[1]];
+}
+
+function randomLetter(used) {
+  let letter;
+  do {
+    letter = randomChoice(LETTERS);
+  } while (used.has(letter));
+  used.add(letter);
+  return letter;
+}
+
+// =============================================================================
+// Stimulus generation
+// =============================================================================
+
+/**
+ * Build one trial for a given lag.
+ *
+ * Stream is STREAM_LENGTH items. T1 is placed at a random 1-indexed
+ * serial position from T1_POSITIONS (e.g. 7, 8, or 9). T2 follows at
+ * the selected lag.
+ *
+ * Lag definition (unchanged): T2 index - T1 index === lag
+ *   Lag 1 → T1 immediately followed by T2
+ *   Lag 2 → one letter between T1 and T2
+ *   …intervening distractors between T1 and T2 = lag - 1
+ */
+function generateTrial(lag) {
+  const t1Position = randomChoice(T1_POSITIONS); // 1-indexed
+  const t1Index = t1Position - 1; // 0-indexed
+  const t2Index = t1Index + lag;
+
+  if (t2Index >= STREAM_LENGTH) {
+    console.error("T2 exceeds stream length", { lag, t1Position, STREAM_LENGTH });
+  }
+
+  const [t1, t2] = pickUniqueDigits();
+  const usedLetters = new Set();
+  const sequence = new Array(STREAM_LENGTH);
+
+  sequence[t1Index] = String(t1);
+  sequence[t2Index] = String(t2);
+
+  for (let i = 0; i < STREAM_LENGTH; i++) {
+    if (sequence[i] === undefined) {
+      sequence[i] = randomLetter(usedLetters);
+    }
+  }
+
+  // Sanity: lag placement
+  if (t2Index - t1Index !== lag) {
+    console.error("Lag placement error", { lag, t1Index, t2Index, sequence });
+  }
+
+  return {
+    lag,
+    t1,
+    t2,
+    t1_position: t1Position,
+    t1Index,
+    t2Index,
+    stream_length: STREAM_LENGTH,
+    sequence,
+  };
+}
+
+/**
+ * Build full experimental set: TRIALS_PER_LAG for each lag, then shuffle.
+ */
+function generateTrials() {
+  const trials = [];
+  for (const lag of LAGS) {
+    for (let i = 0; i < TRIALS_PER_LAG; i++) {
+      trials.push(generateTrial(lag));
+    }
+  }
+  return shuffleArray(trials);
+}
+
+function generatePracticeTrials() {
+  // Mix of lags so practice feels like the real task
+  const practiceLags = [1, 2, 3, 5, 7];
+  const trials = [];
+  for (let i = 0; i < PRACTICE_TRIALS; i++) {
+    trials.push(generateTrial(practiceLags[i % practiceLags.length]));
+  }
+  return shuffleArray(trials);
+}
+
+// =============================================================================
+// UI helpers
+// =============================================================================
+
+function showScreen(name) {
+  for (const key of Object.keys(screens)) {
+    screens[key].classList.add("hidden");
+  }
+  screens[name].classList.remove("hidden");
+}
+
+function clearStimulus() {
+  stimulusEl.textContent = "";
+}
+
+function setStimulus(text) {
+  stimulusEl.textContent = text;
+}
+
+function hideResponseControls() {
+  practiceFeedback.classList.add("hidden");
+  practiceFeedback.textContent = "";
+  practiceFeedback.classList.remove("correct", "incorrect");
+  responseError.classList.add("hidden");
+  responseT1.value = "";
+  responseT2.value = "";
+  responseForm.querySelectorAll("input, button").forEach((el) => {
+    el.disabled = false;
+  });
+}
+
+function parseDigit(value) {
+  const trimmed = String(value).trim();
+  if (!/^[0-9]$/.test(trimmed)) return null;
+  return Number(trimmed);
+}
+
+// =============================================================================
+// RSVP / trial runner
+// =============================================================================
+
+async function showRSVP(sequence) {
+  clearStimulus();
+  for (const item of sequence) {
+    // Replace (never stack) — only one character visible at a time
+    setStimulus(item);
+    await sleep(ITEM_DURATION_MS);
+  }
+  clearStimulus();
+}
+
+/**
+ * Run a single trial: fixation → RSVP → collect response → score.
+ * @param {object} trial
+ * @param {{ isPractice: boolean, trialNumber: number, totalTrials: number }} opts
+ * @returns {Promise<object|null>} scored result for experimental trials; null for practice
+ */
+async function runTrial(trial, opts) {
+  focusLostDuringTrial = false;
+  experimentRunning = true;
+
+  // 1. Fixation
+  showScreen("rsvp");
+  setStimulus("+");
+  await sleep(FIXATION_DURATION_MS);
+
+  // 2–4. RSVP stream, then clear
+  await showRSVP(trial.sequence);
+
+  experimentRunning = false;
+
+  // 5–8. Response
+  const response = await collectResponse(opts);
+
+  const scored = scoreTrial(trial, response, opts);
+
+  if (opts.isPractice) {
+    await showPracticeFeedback(scored);
+    return null;
+  }
+
+  return scored;
+}
+
+function collectResponse(opts) {
+  return new Promise((resolve) => {
+    hideResponseControls();
+
+    if (opts.isPractice) {
+      progressEl.textContent = `Practice ${opts.trialNumber} of ${opts.totalTrials}`;
+    } else {
+      progressEl.textContent = `Trial ${opts.trialNumber} of ${opts.totalTrials}`;
+    }
+
+    showScreen("response");
+    submitting = false;
+
+    // Focus first field after paint
+    requestAnimationFrame(() => {
+      responseT1.focus();
+    });
+
+    const onSubmit = (event) => {
+      event.preventDefault();
+      if (submitting) return;
+
+      const r1 = parseDigit(responseT1.value);
+      const r2 = parseDigit(responseT2.value);
+
+      if (r1 === null || r2 === null) {
+        responseError.classList.remove("hidden");
+        return;
+      }
+
+      responseError.classList.add("hidden");
+      submitting = true;
+
+      // Prevent double submission
+      responseForm.querySelectorAll("input, button").forEach((el) => {
+        el.disabled = true;
+      });
+
+      responseForm.removeEventListener("submit", onSubmit);
+
+      resolve({
+        response_t1: r1,
+        response_t2: r2,
+        focus_lost: focusLostDuringTrial ? 1 : 0,
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    responseForm.addEventListener("submit", onSubmit);
+  });
+}
+
+function scoreTrial(trial, response, opts) {
+  const r1 = response.response_t1;
+  const r2 = response.response_t2;
+
+  // Strict ordered scoring (report slot must match target identity)
+  const t1_correct = r1 === trial.t1 ? 1 : 0;
+  const t2_correct = r2 === trial.t2 ? 1 : 0;
+
+  // Identity / order-robust scoring (useful when same-category targets reverse)
+  const order_reversed = r1 === trial.t2 && r2 === trial.t1 ? 1 : 0;
+  const both_targets_identified =
+    (t1_correct === 1 && t2_correct === 1) || order_reversed === 1 ? 1 : 0;
+  const response_order_correct =
+    t1_correct === 1 && t2_correct === 1 ? 1 : 0;
+
+  return {
+    participant_id: participantId,
+    trial: opts.trialNumber,
+    lag: trial.lag,
+    t1: trial.t1,
+    t2: trial.t2,
+    t1_position: trial.t1_position,
+    stream_length: trial.stream_length,
+    response_t1: r1,
+    response_t2: r2,
+    t1_correct,
+    t2_correct,
+    response_order_correct,
+    both_targets_identified,
+    order_reversed,
+    item_duration_ms: ITEM_DURATION_MS,
+    focus_lost: response.focus_lost,
+    timestamp: response.timestamp,
+  };
+}
+
+async function showPracticeFeedback(scored) {
+  practiceFeedback.classList.remove("hidden", "correct", "incorrect");
+
+  if (scored.response_order_correct === 1) {
+    practiceFeedback.textContent = "Correct";
+    practiceFeedback.classList.add("correct");
+  } else if (scored.order_reversed === 1) {
+    practiceFeedback.textContent =
+      `Both numbers seen, but order was reversed (targets were ${scored.t1} then ${scored.t2})`;
+    practiceFeedback.classList.add("incorrect");
+  } else {
+    practiceFeedback.textContent = `Targets were ${scored.t1} and ${scored.t2}`;
+    practiceFeedback.classList.add("incorrect");
+  }
+
+  await sleep(PRACTICE_FEEDBACK_MS);
+}
+
+// =============================================================================
+// Phase runners
+// =============================================================================
+
+async function runPracticePhase() {
+  state = "practice";
+  practiceTrials = generatePracticeTrials();
+
+  for (let i = 0; i < practiceTrials.length; i++) {
+    await runTrial(practiceTrials[i], {
+      isPractice: true,
+      trialNumber: i + 1,
+      totalTrials: practiceTrials.length,
+    });
+  }
+
+  state = "practice-complete";
+  const countEl = document.getElementById("experiment-trial-count");
+  if (countEl) countEl.textContent = String(TOTAL_EXPERIMENTAL_TRIALS);
+  showScreen("practiceComplete");
+}
+
+async function runExperimentPhase() {
+  state = "experiment";
+  experimentalTrials = generateTrials();
+  results = [];
+  currentTrialIndex = 0;
+
+  // Verify lag counts (dev check)
+  const lagCounts = {};
+  for (const t of experimentalTrials) {
+    lagCounts[t.lag] = (lagCounts[t.lag] || 0) + 1;
+  }
+  console.log("Experimental lag counts:", lagCounts);
+
+  for (let i = 0; i < experimentalTrials.length; i++) {
+    currentTrialIndex = i;
+    const scored = await runTrial(experimentalTrials[i], {
+      isPractice: false,
+      trialNumber: i + 1,
+      totalTrials: experimentalTrials.length,
+    });
+    if (scored) results.push(scored);
+  }
+
+  finishExperiment();
+}
+
+function finishExperiment() {
+  state = "finished";
+  const summary = calculateSummary(results);
+  renderSummary(summary);
+
+  const tsv = formatResultsForSheets(results);
+  resultsFallback.value = tsv;
+
+  showScreen("finished");
+}
+
+// =============================================================================
+// Scoring / summary / export
+// =============================================================================
+
+/**
+ * For each lag (ordered scoring — the on-screen summary DV):
+ *   - n trials
+ *   - T1 accuracy = mean(t1_correct)
+ *   - T2 | T1 = mean(t2_correct) among trials where t1_correct === 1
+ *     (T1-wrong trials excluded from the denominator)
+ *   - usable = count of T1-correct trials contributing to T2|T1
+ */
+function calculateSummary(trialResults) {
+  const byLag = {};
+
+  for (const lag of LAGS) {
+    byLag[lag] = {
+      lag,
+      n: 0,
+      t1Correct: 0,
+      t2GivenT1: 0,
+      t1CorrectCount: 0,
+    };
+  }
+
+  for (const row of trialResults) {
+    const bucket = byLag[row.lag];
+    if (!bucket) continue;
+    bucket.n += 1;
+    bucket.t1Correct += row.t1_correct;
+    if (row.t1_correct === 1) {
+      bucket.t1CorrectCount += 1;
+      bucket.t2GivenT1 += row.t2_correct;
+    }
+  }
+
+  return LAGS.map((lag) => {
+    const b = byLag[lag];
+    const t1Accuracy = b.n > 0 ? b.t1Correct / b.n : null;
+    const t2GivenT1Accuracy =
+      b.t1CorrectCount > 0 ? b.t2GivenT1 / b.t1CorrectCount : null;
+    return {
+      lag: b.lag,
+      n: b.n,
+      t1Accuracy,
+      t2GivenT1Accuracy,
+      t1CorrectCount: b.t1CorrectCount,
+    };
+  });
+}
+
+function formatPercent(value) {
+  if (value === null || Number.isNaN(value)) return "—";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function renderSummary(summary) {
+  const rows = summary
+    .map(
+      (s) => `
+      <tr>
+        <td>${s.lag}</td>
+        <td>${s.n}</td>
+        <td>${formatPercent(s.t1Accuracy)}</td>
+        <td>${formatPercent(s.t2GivenT1Accuracy)}</td>
+        <td>${s.t1CorrectCount}/${s.n}</td>
+      </tr>`
+    )
+    .join("");
+
+  summaryTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Lag</th>
+          <th>Trials</th>
+          <th>T1 accuracy</th>
+          <th>T2 | T1 correct</th>
+          <th>Usable (T1 correct)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+const EXPORT_HEADERS = [
+  "participant_id",
+  "trial",
+  "lag",
+  "t1",
+  "t2",
+  "t1_position",
+  "stream_length",
+  "response_t1",
+  "response_t2",
+  "t1_correct",
+  "t2_correct",
+  "response_order_correct",
+  "both_targets_identified",
+  "order_reversed",
+  "item_duration_ms",
+  "focus_lost",
+  "timestamp",
+];
+
+function formatResultsForSheets(trialResults) {
+  const lines = [EXPORT_HEADERS.join("\t")];
+  for (const row of trialResults) {
+    lines.push(EXPORT_HEADERS.map((h) => row[h]).join("\t"));
+  }
+  return lines.join("\n");
+}
+
+function formatResultsCSV(trialResults) {
+  const lines = [EXPORT_HEADERS.join(",")];
+  for (const row of trialResults) {
+    lines.push(
+      EXPORT_HEADERS.map((h) => {
+        const v = row[h];
+        const s = String(v ?? "");
+        // Quote if needed
+        if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      }).join(",")
+    );
+  }
+  return lines.join("\n");
+}
+
+async function copyResults() {
+  const text = formatResultsForSheets(results);
+  resultsFallback.value = text;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = btnCopy.textContent;
+    btnCopy.textContent = "Copied!";
+    copyStatus.textContent = "Results copied to clipboard.";
+    copyStatus.classList.remove("hidden");
+    setTimeout(() => {
+      btnCopy.textContent = original;
+    }, 2000);
+  } catch (err) {
+    copyStatus.textContent =
+      "Clipboard blocked — select the text below and copy manually.";
+    copyStatus.classList.remove("hidden");
+    resultsFallback.focus();
+    resultsFallback.select();
+  }
+}
+
+function downloadCSV() {
+  const csv = formatResultsCSV(results);
+  const safeId = (participantId || "unknown").replace(/[^\w.-]/g, "_");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `attentional-blink-${safeId}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// =============================================================================
+// Input guards
+// =============================================================================
+
+// Ignore keystrokes during RSVP (except we don't need to do much —
+// response form is hidden). Block form autofill noise during stream.
+document.addEventListener(
+  "keydown",
+  (event) => {
+    if (experimentRunning) {
+      // Prevent accidental browser shortcuts / scrolling during RSVP
+      if (event.key === " " || event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+      }
+    }
+  },
+  true
+);
+
+// Digit-only inputs: keep only first digit typed
+function restrictToDigit(input) {
+  input.addEventListener("input", () => {
+    const digits = input.value.replace(/\D/g, "");
+    input.value = digits.slice(0, 1);
+  });
+}
+
+restrictToDigit(responseT1);
+restrictToDigit(responseT2);
+
+// Auto-advance to T2 after entering T1
+responseT1.addEventListener("input", () => {
+  if (responseT1.value.length === 1) {
+    responseT2.focus();
+  }
+});
+
+// Flag focus loss during a trial (fixation/RSVP or while answering)
+window.addEventListener("blur", () => {
+  if (state === "practice" || state === "experiment") {
+    focusLostDuringTrial = true;
+  }
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (
+    document.hidden &&
+    (state === "practice" || state === "experiment")
+  ) {
+    focusLostDuringTrial = true;
+  }
+});
+
+// =============================================================================
+// Entry points
+// =============================================================================
+
+btnBeginPractice.addEventListener("click", () => {
+  const id = participantIdInput.value.trim();
+  if (!id) {
+    idError.classList.remove("hidden");
+    participantIdInput.focus();
+    return;
+  }
+  idError.classList.add("hidden");
+  participantId = id;
+  participantIdInput.disabled = true;
+  btnBeginPractice.disabled = true;
+  runPracticePhase();
+});
+
+btnBeginExperiment.addEventListener("click", () => {
+  btnBeginExperiment.disabled = true;
+  runExperimentPhase();
+});
+
+btnCopy.addEventListener("click", () => {
+  copyResults();
+});
+
+btnDownload.addEventListener("click", () => {
+  downloadCSV();
+});
+
+// Allow Enter in participant ID to start practice
+participantIdInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    btnBeginPractice.click();
+  }
+});
+
+// Initial screen
+showScreen("instructions");

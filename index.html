@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synaptech — Attentional Blink</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="app">
+    <!-- Instructions -->
+    <section id="screen-instructions" class="screen">
+      <h1>Attentional Blink Experiment</h1>
+      <p class="brand">Synaptech</p>
+
+      <div class="instructions">
+        <p>You will see a rapid stream of letters.</p>
+        <p>Two numbers will appear somewhere in the stream.</p>
+        <p>Your task is to remember <strong>BOTH</strong> numbers.</p>
+        <p>After each stream, enter the first number and second number you saw.</p>
+        <p>Try to keep your eyes focused on the center of the screen.</p>
+
+        <hr />
+
+        <ul>
+          <li>Use a laptop if possible.</li>
+          <li>Keep this browser tab active.</li>
+          <li>Avoid talking during the experiment.</li>
+          <li>Sit at a comfortable viewing distance.</li>
+        </ul>
+      </div>
+
+      <label class="participant-label" for="participant-id">
+        Participant ID
+        <span class="hint">(e.g. P01 — no names)</span>
+      </label>
+      <input
+        id="participant-id"
+        type="text"
+        maxlength="32"
+        autocomplete="off"
+        placeholder="P01"
+        spellcheck="false"
+      />
+      <p id="id-error" class="error hidden" role="alert">
+        Please enter a participant ID before continuing.
+      </p>
+
+      <button id="btn-begin-practice" type="button" class="primary">
+        Begin Practice
+      </button>
+    </section>
+
+    <!-- RSVP display (fixation + stream) -->
+    <section id="screen-rsvp" class="screen screen-rsvp hidden" aria-live="polite">
+      <div id="stimulus" class="stimulus"></div>
+    </section>
+
+    <!-- Response form -->
+    <section id="screen-response" class="screen hidden">
+      <p id="progress" class="progress"></p>
+      <p class="prompt">What were the two numbers?</p>
+
+      <form id="response-form" autocomplete="off">
+        <label for="response-t1">
+          First number:
+          <input
+            id="response-t1"
+            name="response-t1"
+            type="text"
+            inputmode="numeric"
+            maxlength="1"
+            pattern="[0-9]"
+            required
+            autocomplete="off"
+          />
+        </label>
+        <label for="response-t2">
+          Second number:
+          <input
+            id="response-t2"
+            name="response-t2"
+            type="text"
+            inputmode="numeric"
+            maxlength="1"
+            pattern="[0-9]"
+            required
+            autocomplete="off"
+          />
+        </label>
+        <p id="response-error" class="error hidden" role="alert">
+          Please enter a single digit (0–9) for each number.
+        </p>
+        <button id="btn-submit" type="submit" class="primary">Submit</button>
+      </form>
+
+      <p id="practice-feedback" class="feedback hidden"></p>
+    </section>
+
+    <!-- Practice complete -->
+    <section id="screen-practice-complete" class="screen hidden">
+      <h1>Practice complete</h1>
+      <p>The real experiment will now begin.</p>
+      <p>There are <strong id="experiment-trial-count">50</strong> trials.</p>
+      <p>There will be no correctness feedback during the experiment.</p>
+      <button id="btn-begin-experiment" type="button" class="primary">
+        Begin Experiment
+      </button>
+    </section>
+
+    <!-- Finished / summary -->
+    <section id="screen-finished" class="screen hidden">
+      <h1>Experiment complete</h1>
+      <p>Thank you for participating.</p>
+
+      <h2>Summary by lag</h2>
+      <p class="summary-note">
+        T2 | T1 uses strict ordered scoring
+        (P(T2 correct | T1 correct)).
+        Usable trials = how many T1-correct trials entered that denominator.
+        Exported data also includes order-reversal / identity fields for later analysis.
+      </p>
+      <div id="summary-table" class="summary-table"></div>
+
+      <h2>Export results</h2>
+      <p>
+        Click <strong>Copy Raw Results</strong>, then paste into the shared
+        Google Sheet.
+      </p>
+      <div class="export-actions">
+        <button id="btn-copy" type="button" class="primary">
+          Copy Raw Results
+        </button>
+        <button id="btn-download" type="button">Download CSV</button>
+      </div>
+      <p id="copy-status" class="copy-status hidden" aria-live="polite"></p>
+
+      <label class="fallback-label" for="results-fallback">
+        Fallback (if clipboard fails) — select all and copy:
+      </label>
+      <textarea
+        id="results-fallback"
+        class="results-fallback"
+        readonly
+        rows="12"
+        spellcheck="false"
+      ></textarea>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
