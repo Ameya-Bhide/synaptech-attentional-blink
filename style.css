@@ -1,4 +1,4 @@
-/* Synaptech Attentional Blink — minimal, distraction-free UI */
+/* Synaptech Attentional Blink - minimal, distraction-free UI */
 
 *,
 *::before,
@@ -286,7 +286,7 @@ button.primary:hover {
   letter-spacing: 0;
   color: var(--text);
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  /* No transitions/animations — instant on/off for timing control */
+  /* No transitions/animations - instant on/off for timing control */
 }
 
 /* ----- Response screen ----- */

@@ -70,8 +70,8 @@ In code: `index(T2) - index(T1) === lag`. Intervening distractors between T1 and
 ### Stimuli
 
 - Distractors: uppercase letters, excluding `I` and `O`
-- Targets: digits `2–9` (different for T1 and T2)
-- Fixed 20-item stream; T1 randomly at serial positions 7–9; T2 by lag
+- Targets: digits `2-9` (different for T1 and T2)
+- Fixed 20-item stream; T1 randomly at serial positions 7-9; T2 by lag
 
 ### Scoring
 
@@ -114,6 +114,6 @@ CSV download filename: `attentional-blink-P07.csv`.
 
 ## Version 1 notes
 
-- No automatic Google Sheets submission — copy/paste only.
+- No automatic Google Sheets submission - copy/paste only.
 - Refreshing the page resets the experiment cleanly.
 - Files: `index.html`, `style.css`, `script.js`, `README.md`.

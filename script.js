@@ -7,7 +7,7 @@
  */
 
 // =============================================================================
-// Configuration — tune these before club testing
+// Configuration - tune these before club testing
 // =============================================================================
 
 /** Duration each RSVP item is shown (ms). */
@@ -36,8 +36,8 @@ const TRIALS_PER_LAG = 10;
 const PRACTICE_TRIALS = 5;
 
 /**
- * Fixed RSVP stream length (items). Typical AB streams are ~18–20.
- * With T1 at positions 7–9 and max lag 7, T2 lands by position 16,
+ * Fixed RSVP stream length (items). Typical AB streams are ~18-20.
+ * With T1 at positions 7-9 and max lag 7, T2 lands by position 16,
  * leaving several trailing distractors.
  */
 const STREAM_LENGTH = 20;
@@ -49,12 +49,12 @@ const STREAM_LENGTH = 20;
 const T1_POSITIONS = [7, 8, 9];
 
 /**
- * Letter distractors — uppercase, excluding I/O (resemble 1/0).
+ * Letter distractors - uppercase, excluding I/O (resemble 1/0).
  */
 const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ".split("");
 
 /**
- * Digit targets — exclude 0/1 (resemble O/I).
+ * Digit targets - exclude 0/1 (resemble O/I).
  */
 const DIGITS = [2, 3, 4, 5, 6, 7, 8, 9];
 
@@ -171,7 +171,7 @@ function randomChoice(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/** Fisher–Yates shuffle (in place). Returns the same array. */
+/** Fisher-Yates shuffle (in place). Returns the same array. */
 function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -316,7 +316,7 @@ function parseDigit(value) {
 async function showRSVP(sequence) {
   clearStimulus();
   for (const item of sequence) {
-    // Replace (never stack) — only one character visible at a time
+    // Replace (never stack) - only one character visible at a time
     setStimulus(item);
     await sleep(ITEM_DURATION_MS);
   }
@@ -338,12 +338,12 @@ async function runTrial(trial, opts) {
   setStimulus("+");
   await sleep(FIXATION_DURATION_MS);
 
-  // 2–4. RSVP stream, then clear
+  // 2-4. RSVP stream, then clear
   await showRSVP(trial.sequence);
 
   experimentRunning = false;
 
-  // 5–8. Response
+  // 5-8. Response
   const response = await collectResponse(opts);
 
   const scored = scoreTrial(trial, response, opts);
@@ -555,7 +555,7 @@ function finishExperiment() {
 // =============================================================================
 
 /**
- * For each lag (ordered scoring — the on-screen summary DV):
+ * For each lag (ordered scoring - the on-screen summary DV):
  *   - n trials
  *   - T1 accuracy = mean(t1_correct)
  *   - T2 | T1 = mean(t2_correct) among trials where t1_correct === 1
@@ -602,7 +602,7 @@ function calculateSummary(trialResults) {
 }
 
 function formatPercent(value) {
-  if (value === null || Number.isNaN(value)) return "—";
+  if (value === null || Number.isNaN(value)) return "-";
   return `${(value * 100).toFixed(1)}%`;
 }
 
@@ -701,7 +701,7 @@ async function copyResults() {
     }, 2000);
   } catch (err) {
     copyStatus.textContent =
-      "Clipboard blocked — select the text below and copy manually.";
+      "Clipboard blocked - select the text below and copy manually.";
     copyStatus.classList.remove("hidden");
     resultsFallback.focus();
     resultsFallback.select();
@@ -844,7 +844,7 @@ async function submitResults() {
 // Input guards
 // =============================================================================
 
-// Ignore keystrokes during RSVP (except we don't need to do much —
+// Ignore keystrokes during RSVP (except we don't need to do much -
 // response form is hidden). Block form autofill noise during stream.
 document.addEventListener(
   "keydown",
@@ -922,6 +922,6 @@ if (btnSubmit) {
   });
 }
 
-// Initial screen — assign ID immediately so concurrent participants diverge
+// Initial screen - assign ID immediately so concurrent participants diverge
 assignParticipantId();
 showScreen("instructions");
