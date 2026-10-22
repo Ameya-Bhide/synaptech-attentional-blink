@@ -64,6 +64,17 @@ const PRACTICE_FEEDBACK_MS = 1200;
 /** Total experimental trials (lags × trials per lag). */
 const TOTAL_EXPERIMENTAL_TRIALS = LAGS.length * TRIALS_PER_LAG;
 
+/**
+ * Google Apps Script web app URL (/exec).
+ * Paste the deployed web app URL here before club use.
+ */
+const RESULTS_ENDPOINT = "PASTE_WEB_APP_URL_HERE";
+
+/** Bumped when the exported data schema or paradigm changes. */
+const EXPERIMENT_VERSION = "1.0";
+
+const LOCAL_STORAGE_KEY = "attentionalBlinkResults";
+
 // =============================================================================
 // Experiment state
 // =============================================================================
@@ -79,6 +90,8 @@ let currentTrialIndex = 0;
 let experimentRunning = false;
 let submitting = false;
 let focusLostDuringTrial = false;
+let resultsSubmitted = false;
+let submissionInProgress = false;
 
 // =============================================================================
 // DOM references
@@ -107,7 +120,10 @@ const summaryTable = document.getElementById("summary-table");
 const resultsFallback = document.getElementById("results-fallback");
 const btnCopy = document.getElementById("btn-copy");
 const btnDownload = document.getElementById("btn-download");
+const btnSubmit = document.getElementById("btn-submit-results");
 const copyStatus = document.getElementById("copy-status");
+const submitStatus = document.getElementById("submit-status");
+const trialsRecordedEl = document.getElementById("trials-recorded");
 
 // =============================================================================
 // Utilities
@@ -395,6 +411,9 @@ function scoreTrial(trial, response, opts) {
     item_duration_ms: ITEM_DURATION_MS,
     focus_lost: response.focus_lost,
     timestamp: response.timestamp,
+    experiment_version: EXPERIMENT_VERSION,
+    // Full RSVP stream for this trial (array; Apps Script stringifies for Sheets)
+    sequence: [...trial.sequence],
   };
 }
 
@@ -466,11 +485,34 @@ async function runExperimentPhase() {
 
 function finishExperiment() {
   state = "finished";
+  resultsSubmitted = false;
+  submissionInProgress = false;
+
   const summary = calculateSummary(results);
   renderSummary(summary);
 
   const tsv = formatResultsForSheets(results);
   resultsFallback.value = tsv;
+
+  if (trialsRecordedEl) {
+    trialsRecordedEl.textContent = `${results.length} / ${TOTAL_EXPERIMENTAL_TRIALS} trials recorded`;
+  }
+
+  resetSubmitButtonUI();
+
+  try {
+    localStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify({
+        experiment_version: EXPERIMENT_VERSION,
+        participant_id: participantId,
+        saved_at: new Date().toISOString(),
+        trials: results,
+      })
+    );
+  } catch (err) {
+    console.warn("localStorage backup failed:", err);
+  }
 
   showScreen("finished");
 }
@@ -579,12 +621,20 @@ const EXPORT_HEADERS = [
   "item_duration_ms",
   "focus_lost",
   "timestamp",
+  "experiment_version",
+  "sequence",
 ];
+
+/** Serialize a field for TSV/CSV (arrays → JSON string). */
+function exportCellValue(value) {
+  if (Array.isArray(value)) return JSON.stringify(value);
+  return value ?? "";
+}
 
 function formatResultsForSheets(trialResults) {
   const lines = [EXPORT_HEADERS.join("\t")];
   for (const row of trialResults) {
-    lines.push(EXPORT_HEADERS.map((h) => row[h]).join("\t"));
+    lines.push(EXPORT_HEADERS.map((h) => exportCellValue(row[h])).join("\t"));
   }
   return lines.join("\n");
 }
@@ -594,9 +644,7 @@ function formatResultsCSV(trialResults) {
   for (const row of trialResults) {
     lines.push(
       EXPORT_HEADERS.map((h) => {
-        const v = row[h];
-        const s = String(v ?? "");
-        // Quote if needed
+        const s = String(exportCellValue(row[h]));
         if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
         return s;
       }).join(",")
@@ -639,6 +687,124 @@ function downloadCSV() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// =============================================================================
+// Google Sheets submission (Apps Script web app)
+// =============================================================================
+
+function resetSubmitButtonUI() {
+  if (!btnSubmit) return;
+  btnSubmit.textContent = "Submit Results";
+  btnSubmit.disabled = false;
+  if (submitStatus) {
+    submitStatus.textContent = "";
+    submitStatus.classList.add("hidden");
+    submitStatus.classList.remove("ok", "error");
+  }
+}
+
+function setSubmitStatus(message, kind) {
+  if (!submitStatus) return;
+  submitStatus.textContent = message;
+  submitStatus.classList.remove("hidden", "ok", "error");
+  if (kind) submitStatus.classList.add(kind);
+}
+
+async function submitResults() {
+  if (resultsSubmitted || submissionInProgress) return;
+  if (!results.length) {
+    setSubmitStatus("No results to submit.", "error");
+    return;
+  }
+
+  if (
+    !RESULTS_ENDPOINT ||
+    RESULTS_ENDPOINT === "PASTE_WEB_APP_URL_HERE"
+  ) {
+    console.error("RESULTS_ENDPOINT is not configured.");
+    btnSubmit.textContent = "Submission failed";
+    setSubmitStatus(
+      "Submission is not configured yet. Your results are still available on this page. Please use Copy Results or Download CSV as a backup.",
+      "error"
+    );
+    return;
+  }
+
+  submissionInProgress = true;
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = "Submitting...";
+  setSubmitStatus("Sending results…", null);
+
+  const payload = {
+    experiment_version: EXPERIMENT_VERSION,
+    trials: results,
+  };
+
+  console.log("Submitting results...", payload);
+
+  try {
+    const response = await fetch(RESULTS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    console.log("Submission response:", responseText);
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.warn("Could not parse submission response as JSON:", parseErr);
+    }
+
+    const ok =
+      response.ok &&
+      parsed &&
+      parsed.success === true;
+
+    if (!ok) {
+      throw new Error(
+        (parsed && parsed.error) ||
+          `Submission failed (HTTP ${response.status})`
+      );
+    }
+
+    resultsSubmitted = true;
+    btnSubmit.textContent = "Results submitted ✓";
+    btnSubmit.disabled = true;
+    const rows =
+      typeof parsed.rows_added === "number"
+        ? ` (${parsed.rows_added} rows)`
+        : "";
+    setSubmitStatus(
+      `Your results were added to the class dataset${rows}.`,
+      "ok"
+    );
+  } catch (err) {
+    console.error("Submission failed:", err);
+    resultsSubmitted = false;
+    submissionInProgress = false;
+    btnSubmit.textContent = "Submission failed";
+    btnSubmit.disabled = false;
+    setSubmitStatus(
+      "Your results are still available on this page. Please use Copy Results or Download CSV as a backup.",
+      "error"
+    );
+    // After a brief moment, restore the default label for retry clarity
+    setTimeout(() => {
+      if (!resultsSubmitted && !submissionInProgress) {
+        btnSubmit.textContent = "Submit Results";
+      }
+    }, 2000);
+    return;
+  }
+
+  submissionInProgress = false;
 }
 
 // =============================================================================
@@ -724,6 +890,12 @@ btnCopy.addEventListener("click", () => {
 btnDownload.addEventListener("click", () => {
   downloadCSV();
 });
+
+if (btnSubmit) {
+  btnSubmit.addEventListener("click", () => {
+    submitResults();
+  });
+}
 
 // Allow Enter in participant ID to start practice
 participantIdInput.addEventListener("keydown", (event) => {

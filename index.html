@@ -112,6 +112,7 @@
     <section id="screen-finished" class="screen hidden">
       <h1>Experiment complete</h1>
       <p>Thank you for participating.</p>
+      <p id="trials-recorded" class="trials-recorded">50 / 50 trials recorded</p>
 
       <h2>Summary by lag</h2>
       <p class="summary-note">
@@ -122,14 +123,21 @@
       </p>
       <div id="summary-table" class="summary-table"></div>
 
-      <h2>Export results</h2>
+      <h2>Submit results</h2>
+      <p>Send your session to the class Google Sheet (recommended).</p>
+      <button id="btn-submit-results" type="button" class="primary submit-primary">
+        Submit Results
+      </button>
+      <p id="submit-status" class="submit-status hidden" aria-live="polite"></p>
+
+      <h2>Backup options</h2>
       <p>
-        Click <strong>Copy Raw Results</strong>, then paste into the shared
-        Google Sheet.
+        If submission fails, use Copy Results or Download CSV and paste into
+        the shared sheet.
       </p>
       <div class="export-actions">
-        <button id="btn-copy" type="button" class="primary">
-          Copy Raw Results
+        <button id="btn-copy" type="button">
+          Copy Results
         </button>
         <button id="btn-download" type="button">Download CSV</button>
       </div>

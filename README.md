@@ -15,10 +15,12 @@ All stimulus generation, timing, scoring, and result formatting run locally in t
 3. Complete ~5 practice trials (with brief feedback)
 4. Complete 50 randomized experimental trials
 5. View a summary by lag (including usable T1-correct trial counts)
-6. **Copy Raw Results** and paste into a shared Google Sheet  
-   (optional: **Download CSV**)
+6. Click **Submit Results** to POST the session to the class Google Sheet  
+   (backup: **Copy Results** / **Download CSV**)
 
 Practice trials are **not** included in the exported dataset.
+
+Set `RESULTS_ENDPOINT` in [`script.js`](script.js) to your deployed Google Apps Script `/exec` URL before using Submit Results.
 
 ## Local testing
 
@@ -98,6 +100,8 @@ const TRIALS_PER_LAG = 10;
 const PRACTICE_TRIALS = 5;
 const STREAM_LENGTH = 20;
 const T1_POSITIONS = [7, 8, 9];
+const RESULTS_ENDPOINT = "PASTE_WEB_APP_URL_HERE";
+const EXPERIMENT_VERSION = "1.0";
 ```
 
 Adjust these after pilot testing; refresh the page to reset the experiment.
