@@ -68,7 +68,8 @@ const TOTAL_EXPERIMENTAL_TRIALS = LAGS.length * TRIALS_PER_LAG;
  * Google Apps Script web app URL (/exec).
  * Paste the deployed web app URL here before club use.
  */
-const RESULTS_ENDPOINT = "PASTE_WEB_APP_URL_HERE";
+const RESULTS_ENDPOINT =
+  "https://script.google.com/macros/s/AKfycbwTmNb_JB9YQulvXDy44qNKH4_gnz_2f0xKm0I0juOlZq9vnYoRsRE9L4V1fdEktsvMCw/exec";
 
 /** Bumped when the exported data schema or paradigm changes. */
 const EXPERIMENT_VERSION = "1.0";
